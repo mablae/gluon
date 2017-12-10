@@ -1,0 +1,367 @@
+From: Tim Thorpe <tim@tfthorpe.net>
+Date: Mon, 25 Sep 2017 04:38:49 -0500
+Subject: ar71xx: add support for TP-Link TL-WR1043N v5
+
+TP-Link TL-WR1043N v5 appears to be identical to the TL-WR1043ND v4,
+except that the USB port has been removed and there is no longer a
+removable antenna option.
+
+The software is more in line with the Archer series in that it uses a
+nested bootloader scheme.
+
+Specifications:
+
+ - QCA9563 at 775 MHz
+ - 64 MB RAM
+ - 16 MB flash
+ - 3 (non-detachable) Antennas / 450 Mbit
+ - 1x/4x WAN/LAN Gbps Ethernet (QCA8337)
+ - reset and Wi-Fi buttons
+
+Signed-off-by: Tim Thorpe <tim@tfthorpe.net>
+Signed-off-by: Ludwig Thomeczek <ledesrc@wxorx.net>
+
+diff --git a/target/linux/ar71xx/base-files/etc/board.d/01_leds b/target/linux/ar71xx/base-files/etc/board.d/01_leds
+index 98dcbf35bca8533a99b8df9cfdd9676743bc6181..9a751c17eb8b69ee095d3bfc4e07f23457452d66 100755
+--- a/target/linux/ar71xx/base-files/etc/board.d/01_leds
++++ b/target/linux/ar71xx/base-files/etc/board.d/01_leds
+@@ -680,14 +680,20 @@ tl-wr1043nd-v2)
+ 	ucidef_set_led_usbdev "usb" "USB" "tp-link:green:usb" "1-1"
+ 	ucidef_set_led_wlan "wlan" "WLAN" "tp-link:green:wlan" "phy0tpt"
+ 	;;
++tl-wr1043n-v5|\
+ tl-wr1043nd-v4)
+-	ucidef_set_led_usbdev "usb" "USB" "tp-link:green:usb" "1-1"
+ 	ucidef_set_led_wlan "wlan" "WLAN" "tp-link:green:wlan" "phy0tpt"
+ 	ucidef_set_led_switch "wan" "WAN" "tp-link:green:wan" "switch0" "0x20"
+ 	ucidef_set_led_switch "lan1" "LAN1" "tp-link:green:lan1" "switch0" "0x10"
+ 	ucidef_set_led_switch "lan2" "LAN2" "tp-link:green:lan2" "switch0" "0x08"
+ 	ucidef_set_led_switch "lan3" "LAN3" "tp-link:green:lan3" "switch0" "0x04"
+ 	ucidef_set_led_switch "lan4" "LAN4" "tp-link:green:lan4" "switch0" "0x02"
++
++	case "$board" in
++	tl-wr1043nd-v4)
++		ucidef_set_led_usbdev "usb" "USB" "tp-link:green:usb" "1-1"
++		;;
++	esac
+ 	;;
+ tl-wr2543n)
+ 	ucidef_set_led_usbdev "usb" "USB" "tp-link:green:usb" "1-1"
+diff --git a/target/linux/ar71xx/base-files/etc/board.d/02_network b/target/linux/ar71xx/base-files/etc/board.d/02_network
+index 748ee94407f9e3be231fa3b7f50931eca4d1b0f4..2bdca4d82cfcbdbd277a86bd052398d755e4ec4e 100755
+--- a/target/linux/ar71xx/base-files/etc/board.d/02_network
++++ b/target/linux/ar71xx/base-files/etc/board.d/02_network
+@@ -248,7 +248,8 @@ ar71xx_setup_interfaces()
+ 	mynet-n750|\
+ 	sr3200|\
+ 	wndr3700v4|\
+-	wndr4300)
++	wndr4300|\
++	tl-wr1043n-v5)
+ 		ucidef_add_switch "switch0" \
+ 			"0@eth0" "1:lan" "2:lan" "3:lan" "4:lan" "5:wan"
+ 		;;
+@@ -492,6 +493,7 @@ ar71xx_setup_macs()
+ 		lan_mac=$(mtd_get_mac_binary caldata 0)
+ 		wan_mac=$(mtd_get_mac_binary caldata 6)
+ 		;;
++	tl-wr1043n-v5|\
+ 	tl-wr1043nd-v4)
+ 		lan_mac=$(mtd_get_mac_binary product-info 8)
+ 		wan_mac=$(macaddr_add "$lan_mac" 1)
+diff --git a/target/linux/ar71xx/base-files/etc/diag.sh b/target/linux/ar71xx/base-files/etc/diag.sh
+index 7bcc8b6228869e127a39811f3ecf2140004a75f7..9a4eb1693e488d2bd87a9e9185306b7f944bfe36 100644
+--- a/target/linux/ar71xx/base-files/etc/diag.sh
++++ b/target/linux/ar71xx/base-files/etc/diag.sh
+@@ -362,6 +362,7 @@ get_status_led() {
+ 	tl-wdr3320-v2|\
+ 	tl-wdr3500|\
+ 	tl-wr1041n-v2|\
++	tl-wr1043n-v5|\
+ 	tl-wr1043nd|\
+ 	tl-wr1043nd-v2|\
+ 	tl-wr1043nd-v4|\
+diff --git a/target/linux/ar71xx/base-files/lib/ar71xx.sh b/target/linux/ar71xx/base-files/lib/ar71xx.sh
+index 1c23198b868125738c22e45260ee63ff195aed2c..51944e194194f878f974602a89358314141b5a16 100755
+--- a/target/linux/ar71xx/base-files/lib/ar71xx.sh
++++ b/target/linux/ar71xx/base-files/lib/ar71xx.sh
+@@ -953,6 +953,9 @@ ar71xx_board_detect() {
+ 	*"TL-WR1043ND v4")
+ 		name="tl-wr1043nd-v4"
+ 		;;
++	*"TL-WR1043N v5")
++		name="tl-wr1043n-v5"
++		;;
+ 	*TL-WR2543N*)
+ 		name="tl-wr2543n"
+ 		;;
+diff --git a/target/linux/ar71xx/base-files/lib/upgrade/platform.sh b/target/linux/ar71xx/base-files/lib/upgrade/platform.sh
+index 0b2ac5f6ffe298f0ea0b180a90afdba893391f90..edfd351543763bddd5c67a1a0747fa450783d77c 100755
+--- a/target/linux/ar71xx/base-files/lib/upgrade/platform.sh
++++ b/target/linux/ar71xx/base-files/lib/upgrade/platform.sh
+@@ -264,6 +264,7 @@ platform_check_image() {
+ 	tew-712br|\
+ 	tew-732br|\
+ 	tew-823dru|\
++	tl-wr1043n-v5|\
+ 	unifi-outdoor|\
+ 	unifiac-lite|\
+ 	unifiac-pro|\
+diff --git a/target/linux/ar71xx/config-4.4 b/target/linux/ar71xx/config-4.4
+index 844900051b8072a330354d938f503a71d7d6b7f1..396a4fa02adb37c6e5f9f7f1cc40fd1014361654 100644
+--- a/target/linux/ar71xx/config-4.4
++++ b/target/linux/ar71xx/config-4.4
+@@ -184,6 +184,7 @@ CONFIG_ATH79_MACH_TL_WR1041N_V2=y
+ CONFIG_ATH79_MACH_TL_WR1043ND=y
+ CONFIG_ATH79_MACH_TL_WR1043ND_V2=y
+ CONFIG_ATH79_MACH_TL_WR1043ND_V4=y
++CONFIG_ATH79_MACH_TL_WR1043N_V5=y
+ CONFIG_ATH79_MACH_TL_WR2543N=y
+ CONFIG_ATH79_MACH_TL_WR703N=y
+ CONFIG_ATH79_MACH_TL_WR720N_V3=y
+diff --git a/target/linux/ar71xx/files/arch/mips/ath79/Kconfig.openwrt b/target/linux/ar71xx/files/arch/mips/ath79/Kconfig.openwrt
+index cbe345dd40ff080bf8b43347eb4ffdfd2f0c8a2e..a4b2bc2200f49a3e192dd3df89291faafc2ae1ce 100644
+--- a/target/linux/ar71xx/files/arch/mips/ath79/Kconfig.openwrt
++++ b/target/linux/ar71xx/files/arch/mips/ath79/Kconfig.openwrt
+@@ -1595,6 +1595,15 @@ config ATH79_MACH_TL_WR1041N_V2
+ 	select ATH79_DEV_USB
+ 	select ATH79_DEV_WMAC
+ 
++config ATH79_MACH_TL_WR1043N_V5
++	bool "TP-LINK TL-WR1043N v5 support"
++	select SOC_QCA956X
++	select ATH79_DEV_ETH
++	select ATH79_DEV_GPIO_BUTTONS
++	select ATH79_DEV_LEDS_GPIO
++	select ATH79_DEV_M25P80
++	select ATH79_DEV_WMAC
++
+ config ATH79_MACH_TL_WR1043ND
+ 	bool "TP-LINK TL-WR1043ND support"
+ 	select SOC_AR913X
+diff --git a/target/linux/ar71xx/files/arch/mips/ath79/mach-tl-wr1043nd-v4.c b/target/linux/ar71xx/files/arch/mips/ath79/mach-tl-wr1043nd-v4.c
+index b1539c5d71a61806b88c50f1a78f6a27d98d7a2d..450819a9e6baa997dab2dfba4c5a19261aae9664 100644
+--- a/target/linux/ar71xx/files/arch/mips/ath79/mach-tl-wr1043nd-v4.c
++++ b/target/linux/ar71xx/files/arch/mips/ath79/mach-tl-wr1043nd-v4.c
+@@ -5,6 +5,7 @@
+  *  Copyright (C) 2016 Matthias Schiffer <mschiffer@universe-factory.net>
+  *  Copyright (C) 2016 Andreas Ziegler <github@andreas-ziegler.de>
+  *  Copyright (C) 2016 Ludwig Thomeczek <ledesrc@wxorx.net>
++ *  Copyright (C) 2017 Tim Thorpe <tim@tfthorpe.net>
+  *
+  *  Derived from: mach-dir-869-a1.c
+  *
+@@ -62,6 +63,8 @@
+ #define TL_WR1043_V4_EEPROM_ADDR		0x1fff0000
+ #define TL_WR1043_V4_WMAC_CALDATA_OFFSET	0x1000
+ 
++#define TL_WR1043N_V5_MAC_LOCATION		0x1ff00008
++
+ static struct gpio_led tl_wr1043nd_v4_leds_gpio[] __initdata = {
+ 	{
+ 		.name		= "tp-link:green:wps",
+@@ -188,3 +191,82 @@ static void __init tl_wr1043nd_v4_setup(void)
+ 
+ MIPS_MACHINE(ATH79_MACH_TL_WR1043ND_V4, "TL-WR1043ND-v4",
+ 	     "TP-LINK TL-WR1043ND v4", tl_wr1043nd_v4_setup);
++
++static struct gpio_led tl_wr1043n_v5_leds_gpio[] __initdata = {
++	{
++		.name		= "tp-link:green:wps",
++		.gpio		= TL_WR1043_V4_GPIO_LED_WPS,
++		.active_low	= 1,
++	},
++	{
++		.name		= "tp-link:green:system",
++		.gpio		= TL_WR1043_V4_GPIO_LED_SYSTEM,
++		.active_low	= 1,
++	},
++	{
++		.name		= "tp-link:green:wlan",
++		.gpio		= TL_WR1043_V4_GPIO_LED_WLAN,
++		.active_low	= 1,
++	},
++	{
++		.name		= "tp-link:green:wan",
++		.gpio		= TL_WR1043_V4_GPIO_LED_WAN,
++		.active_low	= 1,
++	},
++	{
++		.name		= "tp-link:green:lan1",
++		.gpio		= TL_WR1043_V4_GPIO_LED_LAN1,
++		.active_low	= 1,
++	},
++	{
++		.name		= "tp-link:green:lan2",
++		.gpio		= TL_WR1043_V4_GPIO_LED_LAN2,
++		.active_low	= 1,
++	},
++	{
++		.name		= "tp-link:green:lan3",
++		.gpio		= TL_WR1043_V4_GPIO_LED_LAN3,
++		.active_low	= 1,
++	},
++	{
++		.name		= "tp-link:green:lan4",
++		.gpio		= TL_WR1043_V4_GPIO_LED_LAN4,
++		.active_low	= 1,
++	},
++};
++
++/* The 1043Nv5 is identical to the 1043NDv4,
++ *  only missing the usb and small firmware layout changes  */
++static void __init tl_wr1043nv5_setup(void)
++{
++	u8 *art = (u8 *) KSEG1ADDR(TL_WR1043_V4_EEPROM_ADDR);
++	u8 *mac = (u8 *) KSEG1ADDR(TL_WR1043N_V5_MAC_LOCATION);
++
++	ath79_register_m25p80(NULL);
++
++	ath79_register_leds_gpio(-1, ARRAY_SIZE(tl_wr1043n_v5_leds_gpio),
++				 tl_wr1043n_v5_leds_gpio);
++	ath79_register_gpio_keys_polled(-1, TL_WR1043_V4_KEYS_POLL_INTERVAL,
++					ARRAY_SIZE(tl_wr1043nd_v4_gpio_keys),
++					tl_wr1043nd_v4_gpio_keys);
++
++	platform_device_register(&ath79_mdio0_device);
++
++	mdiobus_register_board_info(tl_wr1043nd_v4_mdio0_info,
++				    ARRAY_SIZE(tl_wr1043nd_v4_mdio0_info));
++
++	ath79_register_wmac(art + TL_WR1043_V4_WMAC_CALDATA_OFFSET, mac);
++
++	ath79_init_mac(ath79_eth0_data.mac_addr, mac, 0);
++
++	/* GMAC0 is connected to an AR8337 switch */
++	ath79_eth0_data.phy_if_mode = PHY_INTERFACE_MODE_SGMII;
++	ath79_eth0_data.speed = SPEED_1000;
++	ath79_eth0_data.duplex = DUPLEX_FULL;
++	ath79_eth0_data.phy_mask = BIT(0);
++	ath79_eth0_data.mii_bus_dev = &ath79_mdio0_device.dev;
++	ath79_register_eth(0);
++}
++
++MIPS_MACHINE(ATH79_MACH_TL_WR1043N_V5, "TL-WR1043N-v5", "TP-LINK TL-WR1043N v5",
++	     tl_wr1043nv5_setup);
+diff --git a/target/linux/ar71xx/files/arch/mips/ath79/machtypes.h b/target/linux/ar71xx/files/arch/mips/ath79/machtypes.h
+index b6f7602b0e44880d0b93d42213b77d12e8861741..42ab25673fbd2572cc466e26e67fdd0af10008f5 100644
+--- a/target/linux/ar71xx/files/arch/mips/ath79/machtypes.h
++++ b/target/linux/ar71xx/files/arch/mips/ath79/machtypes.h
+@@ -217,6 +217,7 @@ enum ath79_mach_type {
+ 	ATH79_MACH_TL_WDR6500_V2,		/* TP-LINK TL-WDR6500 v2 */
+ 	ATH79_MACH_TL_WPA8630,			/* TP-Link TL-WPA8630 */
+ 	ATH79_MACH_TL_WR1041N_V2,		/* TP-LINK TL-WR1041N v2 */
++	ATH79_MACH_TL_WR1043N_V5,		/* TP-LINK TL-WR1043N v5 */
+ 	ATH79_MACH_TL_WR1043ND,			/* TP-LINK TL-WR1043ND */
+ 	ATH79_MACH_TL_WR1043ND_V2,		/* TP-LINK TL-WR1043ND v2 */
+ 	ATH79_MACH_TL_WR1043ND_V4,		/* TP-LINK TL-WR1043ND v4 */
+diff --git a/target/linux/ar71xx/image/tp-link.mk b/target/linux/ar71xx/image/tp-link.mk
+index e6c96fd89abcc3d78a58ef857ce12d82bc937be8..9da14a8b55e3b89eed6bf082ebbc8e3f38ba60ff 100644
+--- a/target/linux/ar71xx/image/tp-link.mk
++++ b/target/linux/ar71xx/image/tp-link.mk
+@@ -903,7 +903,22 @@ define Device/tl-wr1043nd-v4
+     IMAGE/sysupgrade.bin := append-rootfs | tplink-safeloader sysupgrade
+     IMAGE/factory.bin := append-rootfs | tplink-safeloader factory
+ endef
+-TARGET_DEVICES += tl-wr1043nd-v1 tl-wr1043nd-v2 tl-wr1043nd-v3 tl-wr1043nd-v4
++
++define Device/tl-wr1043n-v5
++  DEVICE_TITLE := TP-LINK TL-WR1043N v5
++  BOARDNAME := TL-WR1043N-v5
++  SUPPORTED_DEVICES := tl-wr1043n-v5
++  DEVICE_PROFILE := TLWR1043
++  MTDPARTS := spi0.0:128k(factory-uboot)ro,128k(u-boot)ro,15104k(firmware),128k(product-info)ro,640k(config)ro,64k(partition-table)ro,128k(logs)ro,64k(art)ro
++  IMAGE_SIZE := 15104k
++  KERNEL := kernel-bin | patch-cmdline | lzma | uImageArcher lzma
++  IMAGES := sysupgrade.bin factory.bin
++  IMAGE/sysupgrade.bin := append-rootfs | tplink-safeloader sysupgrade | \
++	append-metadata | check-size $$$$(IMAGE_SIZE)
++  IMAGE/factory.bin := append-rootfs | tplink-safeloader factory
++  TPLINK_BOARD_NAME := TLWR1043NV5
++endef
++TARGET_DEVICES += tl-wr1043nd-v1 tl-wr1043nd-v2 tl-wr1043nd-v3 tl-wr1043nd-v4 tl-wr1043n-v5
+ 
+ define Device/tl-wr2543-v1
+     $(Device/tplink-8mlzma)
+diff --git a/target/linux/ar71xx/mikrotik/config-default b/target/linux/ar71xx/mikrotik/config-default
+index 019a957da89034aab24b193bfc226cc0b68b3bd8..23e862762600f0724a37fe1a390d4d09639c472c 100644
+--- a/target/linux/ar71xx/mikrotik/config-default
++++ b/target/linux/ar71xx/mikrotik/config-default
+@@ -146,6 +146,7 @@ CONFIG_ATH79_MACH_RBSXTLITE=y
+ # CONFIG_ATH79_MACH_TL_WDR6500_V2 is not set
+ # CONFIG_ATH79_MACH_TL_WPA8630 is not set
+ # CONFIG_ATH79_MACH_TL_WR1041N_V2 is not set
++# CONFIG_ATH79_MACH_TL_WR1043N_V5 is not set
+ # CONFIG_ATH79_MACH_TL_WR1043ND is not set
+ # CONFIG_ATH79_MACH_TL_WR1043ND_V2 is not set
+ # CONFIG_ATH79_MACH_TL_WR1043ND_V4 is not set
+diff --git a/target/linux/ar71xx/nand/config-default b/target/linux/ar71xx/nand/config-default
+index 1f49a976a17fd574c316dc3254993d184e37587f..c11ccfe29795d013776870cf21fb6ca8d907af1b 100644
+--- a/target/linux/ar71xx/nand/config-default
++++ b/target/linux/ar71xx/nand/config-default
+@@ -55,6 +55,7 @@
+ # CONFIG_ATH79_MACH_TL_WDR3500 is not set
+ # CONFIG_ATH79_MACH_TL_WDR4300 is not set
+ # CONFIG_ATH79_MACH_TL_WR1041N_V2 is not set
++# CONFIG_ATH79_MACH_TL_WR1043N_V5 is not set
+ # CONFIG_ATH79_MACH_TL_WR1043ND is not set
+ # CONFIG_ATH79_MACH_TL_WR1043ND_V4 is not set
+ # CONFIG_ATH79_MACH_TL_WR2543N is not set
+diff --git a/tools/firmware-utils/src/tplink-safeloader.c b/tools/firmware-utils/src/tplink-safeloader.c
+index 1b2f51658d7720289b81187bbd53f7131c4ac103..a3fcfb1aadb31ff7a86eb8973e26356aafb73c48 100644
+--- a/tools/firmware-utils/src/tplink-safeloader.c
++++ b/tools/firmware-utils/src/tplink-safeloader.c
+@@ -585,6 +585,42 @@ static struct device_info boards[] = {
+ 		.last_sysupgrade_partition = "file-system"
+ 	},
+ 
++	/** Firmware layout for the TL-WR1043 v5 */
++	{
++		.id     = "TLWR1043NV5",
++		.vendor = "",
++		.support_list =
++			"SupportList:\n"
++			"{product_name:TL-WR1043N,product_ver:5.0.0,special_id:45550000}\n"
++			"{product_name:TL-WR1043N,product_ver:5.0.0,special_id:55530000}\n",
++		.support_trail = '\x00',
++		.soft_ver = "soft_ver:1.0.0\n",
++		.partitions = {
++			{"factory-boot", 0x00000, 0x20000},
++			{"fs-uboot", 0x20000, 0x20000},
++			{"os-image", 0x40000, 0x180000},
++			{"file-system", 0x1c0000, 0xd40000},
++			{"default-mac", 0xf00000, 0x00200},
++			{"pin", 0xf00200, 0x00200},
++			{"device-id", 0xf00400, 0x00100},
++			{"product-info", 0xf00500, 0x0fb00},
++			{"soft-version", 0xf10000, 0x01000},
++			{"extra-para", 0xf11000, 0x01000},
++			{"support-list", 0xf12000, 0x0a000},
++			{"profile", 0xf1c000, 0x04000},
++			{"default-config", 0xf20000, 0x10000},
++			{"user-config", 0xf30000, 0x40000},
++			{"qos-db", 0xf70000, 0x40000},
++			{"certificate", 0xfb0000, 0x10000},
++			{"partition-table", 0xfc0000, 0x10000},
++			{"log", 0xfd0000, 0x20000},
++			{"radio", 0xff0000, 0x10000},
++			{NULL, 0, 0}
++		},
++		.first_sysupgrade_partition = "os-image",
++		.last_sysupgrade_partition = "file-system"
++	},
++
+ 	/** Firmware layout for the RE450 */
+ 	{
+ 		.id = "RE450",
+@@ -995,7 +1031,9 @@ static void build_image(const char *output,
+ 	parts[3] = read_file("os-image", kernel_image, false);
+ 	parts[4] = read_file("file-system", rootfs_image, add_jffs2_eof);
+ 
+-	if (strcasecmp(info->id, "ARCHER-C25-V1") == 0) {
++	/* Some devices need the extra-para partition to accept the firmware */
++	if (strcasecmp(info->id, "ARCHER-C25-V1") == 0 ||
++	    strcasecmp(info->id, "TLWR1043NV5") == 0) {
+ 		const char mdat[11] = {0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00};
+ 		parts[5] = put_data("extra-para", mdat, 11);
+ 	}
